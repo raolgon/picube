@@ -6,9 +6,9 @@
 
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=5" />
 
-  <link rel="icon" href="devchallenges.png" />
+  <!-- <link rel="icon" href="devchallenges.png" />
 
-  <link rel="shortcut icon" type="image/x-icon" href="https://devchallenges.io/" />
+  <link rel="shortcut icon" type="image/x-icon" href="https://devchallenges.io/" /> -->
 
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500&display=swap" rel="stylesheet" />
 
@@ -35,16 +35,9 @@
         <div class="uploaderDropZone" id="uploaderDropZone">
           <p>Drag and drop your file here</p>
         </div>
-        <form action="/" method="POST" enctype="multipart/form-data">
-
-          <label for="name">Image title</label>
-          <input type="text" name="name" id="name" placeholder="Name">
-          <br>
-          <label for="description">Image description</label>
-          <textarea name="description" id="description" rows="2" placeholder="Description"></textarea>
-          <br>
-          <label for="image">Upload images</label>
-          <input type="file" name="files[]" id="image" accept="image/png, image/jpeg" multiple required>
+        <form action="/upload" method="post" enctype="multipart/form-data">
+          <input type="file" name="file" id="file" accept="image/png, image/jpeg, image/jpg" multiple required>
+          <label for="file" id="file-label">Choose file</label>
           <br>
 
           <input type="submit" name="uploaderBtn" id="uploaderBtn" value="Submit"></input>
@@ -56,18 +49,19 @@
       </section> -->
 
       <section class="imgContainer" id="imgContainer">
-        <% items.forEach(function(image) { %>
-          <div>
-            <div>
-                <img src="data:image/<%=image.img.contentType%>;base64,
-                    <%=image.img.data.toString('base64')%>">
-                <div>
-                    <h5><%= image.name %></h5>
-                    <p><%= image.description %></p>
-                </div>
-            </div>
-        </div>
-        <% }) %>
+        <% if(files){ %>
+          <% files.forEach(function(file){ %>
+            <p> <%= file.filename %> </p>
+          <% if(file.isImage){ %>
+            <img src="image/<%= file.filename %>" width="250" alt="">
+          <% } else { %>
+            <p><% file.filename %></p>
+          <% } %>
+          <form action="/files/del/<%= file._id %>" method="post">
+            <button type="submit" class="btn">Remove</button>
+          </form>
+          <% }) %>
+        <% } %>
       </section>
 
       <footer class="footer">
@@ -81,7 +75,7 @@
     </div>
 
     <!-- <script src="bower_components/progressbar.js/dist/progressbar.min.js"></script> -->
-    <script src="js/index.js"></script>
+    <!-- <script src="js/index.js"></script> -->
 </body>
 
 </html>

@@ -1,72 +1,108 @@
-const { urlencoded } = require('express')
 const express = require('express')
-const mongoose = require('mongoose')
-const imgModel = require('./models/imgModel')
-
-//Middlewares
-const GridFsStorage = require('multer-gridfs-storage')
-
-const bodyParser = require('body-parser')
-const multer = require('multer')
-const fs = require('fs');
-const path = require('path');
-const { log } = require('console')
-require('dotenv/config');
-
 const app = express()
 
-const connection = mongoose.connect(process.env.MONGO_URL, {
+const crypto = require('crypto')
+const path = require('path')
+const mongoose = require('mongoose')
+const multer = require('multer')
+const GridFsStorage = require('multer-gridfs-storage')
+
+app.use(express.json())
+app.set('view engine', 'ejs')
+app.use(express.static('public'))
+
+//DB
+const mongoURI = 'mongodb://localhost/upcubeUploader'
+
+const connect = mongoose.createConnection(mongoURI, {
     useNewUrlParser: true,
     useUnifiedTopology: true
 })
 
-app.set('view engine', 'ejs')
-app.use(urlencoded({ extended: false }))
-app.use(bodyParser.urlencoded({ extended: false }))
-app.use(bodyParser.json())
+//init gfs
+let gfs
+connect.once('open', () => {
+    gfs = new mongoose.mongo.GridFSBucket(connect.db, {
+        bucketName: 'uploads'
+    })
+})
 
-app.use(express.static('public'))
+//Storage
+const storage = new GridFsStorage({
+    url: mongoURI,
+    file: (req, file) => {
+        return new Promise((resolve, reject) => {
+            crypto.randomBytes(16, (error, buf) => {
+                if(error){
+                    return reject(error)
+                }
+                const filename = buf.toString('hex') + path.extname(file.originalname)
+                const fileinfo = {
+                    filename: filename,
+                    bucketName: 'uploads'
+                }
+                resolve(fileinfo)
+            })
+        })
+    }
+})
+
+const upload = multer({ storage })
 
 app.get('/', (req, res) => {
-    imgModel.find({}, (error, items) => {
-        if(error) {
-            console.log(error)
+    if(!gfs){
+        console.log("some error occured, check connection to db");
+        res.send("some error occured, check connection to db");
+        process.exit(0);
+    }
+    gfs.find().toArray((err, files) => {
+        if(!files || files.length === 0){
+            return res.render('index', { files: false })
         } else {
-            res.render('index', { items: items})
+            const f = files
+            .map(file => {
+                if(file.contentType === 'image/png' || file.contentType === 'image/jpeg'){
+                    file.isImage = true
+                } else {
+                    file.isImage = false
+                }
+                return file
+            })
+            return res.render('index', { files: f })
         }
     })
 })
 
-//Storage of the images
-const storage = new GridFsStorage({
-    db: connection,
-    destination: (res, file, cb) => {
-        cb(null, 'uploads')
-    },
-    filename: (res, file, cb) => {
-        cb(null, file.fieldname + '-' + new Date())
-    }
+app.post('/upload', upload.single('file'), (req, res) => {
+    res.redirect('/')
 })
 
-const upload = multer({ storage: storage })
+app.get('/image/:filename', (req, res) => {
+    const file = gfs
+    .find({
+        filename: req.params.filename
+    })
+    .toArray((error, files) => {
+        if(!files || files.length === 0){
+            return res.status(400).json({
+                error: 'No files exist'
+            })
+        }
+        gfs.openDownloadStreamByName(req.params.filename).pipe(res)
+    })
+})
 
-app.post('/', upload.single('image'), (res, req, next) => {
-    const imgObj = {
-        name: req.body.name,
-        desc: req.body.description,
-        img: {
-            data: fs.readFileSync(path.join(__dirname + '/uploads/' + req.file.filename)),
-            contentType: 'image/png'
-        }
-    }
-    imgModel.create(imgObj, (error, item) => {
-        if(error){
-            console.log(error)
-        } else {
-            res.redirect('/')
-        }
+//Delete
+
+app.post('/files/del/:id', (req, res) =>{
+    gfs.delete(new mongoose.Types.ObjectId(req.params.id), (err, data) => {
+        if(err) return res.status(400).json({ err: err.message})
+        res.redirect('/')
     })
 })
 
 const port = process.env.PORT || 4000
-app.listen(port, () => console.log(`Server start on port http://localhost:${port}`))
+
+app.listen(port, () => {
+    console.log('server started on ' + `http://localhost:${port}`)
+});
